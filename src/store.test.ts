@@ -1,11 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TaskStore } from "./store.js";
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 describe("TaskStore", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => {
+    vi.clearAllTimers();
+    vi.useRealTimers();
+  });
+
   it("submits a task in queued state with an id", () => {
     const store = new TaskStore();
     const task = store.submit("smoke-login", "staging-web");
@@ -20,10 +22,14 @@ describe("TaskStore", () => {
     const store = new TaskStore({ queueDelayMs: 5, runDelayMs: 10 });
     const task = store.submit("smoke-login", "staging-web", { expectedOutcome: "passed" });
 
-    await sleep(8);
+    await vi.advanceTimersByTimeAsync(4);
+    expect(store.get(task.id)?.status).toBe("queued");
+    await vi.advanceTimersByTimeAsync(1);
     expect(store.get(task.id)?.status).toBe("running");
 
-    await sleep(20);
+    await vi.advanceTimersByTimeAsync(9);
+    expect(store.get(task.id)?.status).toBe("running");
+    await vi.advanceTimersByTimeAsync(1);
     const done = store.get(task.id);
     expect(done?.status).toBe("passed");
     expect(done?.resultSummary).toContain("passed");
@@ -33,7 +39,7 @@ describe("TaskStore", () => {
   it("honours an explicit expectedOutcome of failed", async () => {
     const store = new TaskStore({ queueDelayMs: 5, runDelayMs: 10 });
     const task = store.submit("checkout-flow", "staging-web", { expectedOutcome: "failed" });
-    await sleep(40);
+    await vi.advanceTimersByTimeAsync(15);
     const done = store.get(task.id);
     expect(done?.status).toBe("failed");
     expect(done?.resultSummary).toContain("failed");
@@ -44,7 +50,7 @@ describe("TaskStore", () => {
     const second = new TaskStore({ queueDelayMs: 5, runDelayMs: 10 });
     const a = first.submit("same-name", "staging-web");
     const b = second.submit("same-name", "staging-web");
-    await sleep(40);
+    await vi.advanceTimersByTimeAsync(15);
     // Same name -> same deterministic outcome in both stores.
     expect(first.get(a.id)?.status).toBe(second.get(b.id)?.status);
     expect(["passed", "failed"]).toContain(first.get(a.id)?.status);

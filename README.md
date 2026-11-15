@@ -35,7 +35,7 @@ worker after short simulated delays. Outcomes are deterministic:
 Requires Node.js 20+.
 
 ```bash
-npm install
+npm ci
 npm run build
 npm start
 ```
@@ -63,11 +63,31 @@ Example tool calls (as an MCP client would send them):
 {}
 ```
 
-Run the tests:
+Run the full verification suite (build, unit tests, and a real MCP SDK client
+talking to a separate server process over stdio):
 
 ```bash
 npm test
 ```
+
+Run only the subprocess smoke test:
+
+```bash
+npm run test:smoke
+```
+
+The smoke test initializes an MCP session, discovers all three tools, submits
+synthetic passing and failing tasks, polls both to their terminal states, and
+checks listing, unknown task IDs, invalid inputs, and recovery after errors.
+Requests and polling have time limits, and the subprocess is closed even if an
+assertion fails. Unit lifecycle tests use a controlled clock to avoid depending
+on short wall-clock timing windows.
+
+On 2026-11-15, `npm ci`, `npm run build`, `npm test` (12 tests), and
+`npm run test:smoke` passed locally on Windows with Node.js 24.14.1. This validates
+the SDK/stdio integration; **Claude Code / Claude Desktop integration remains
+unverified**. No Claude executable was found on PATH or in the standard local
+CLI/npm/desktop installation locations checked on that machine.
 
 ## Example client configuration
 
@@ -98,7 +118,15 @@ Claude Desktop (`claude_desktop_config.json`):
 ```
 
 Replace `/absolute/path/to/...` with the real path on your machine, then restart
-the client.
+the client. On Windows, forward slashes are valid in the JSON path, for example
+`E:/projects/mcp-test-task-server-ts/dist/index.js`. Run `npm run build` before
+connecting. These are examples; the test commands do not change client settings.
+
+For a hands-on host check, verify that the client discovers all three tools,
+submit two tasks with `params.expectedOutcome` set to `"passed"` and `"failed"`,
+poll each with `get_task_result`, and confirm both appear in `list_test_tasks`.
+Also request an unknown ID and confirm it returns a tool error. SDK smoke success
+does not replace this host-specific check.
 
 ## Project layout
 
@@ -109,10 +137,13 @@ src/
   store.ts       In-memory task store + fake worker
   store.test.ts  Task lifecycle tests
   tools.test.ts  Tool handler tests
+tests/
+  mcp.integration.test.ts  MCP SDK client + subprocess smoke test
 ```
 
 ## Remaining work
 
+- [x] Repeatable MCP SDK subprocess integration check, including pass/fail and error paths
 - [ ] Verify the server hands-on inside Claude Code / Claude Desktop with the config above
 - [ ] (Optional) Publish to npm so clients can run it via `npx`
 - [ ] (Optional) Add an HTTP transport alongside stdio
